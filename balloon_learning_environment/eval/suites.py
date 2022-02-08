@@ -38,7 +38,7 @@ _eval_suites = dict()
 _eval_suites['big_eval'] = EvaluationSuite(list(range(10_000)), 960)
 _eval_suites['medium_eval'] = EvaluationSuite(list(range(1_000)), 960)
 _eval_suites['small_eval'] = EvaluationSuite(list(range(100)), 960)
-_eval_suites['tiny_eval'] = EvaluationSuite(list(range(10)), 960)
+_eval_suites['tiny_eval'] = EvaluationSuite(list(range(5)), 960)
 _eval_suites['micro_eval'] = EvaluationSuite([0], 960)
 
 
@@ -46,11 +46,13 @@ def available_suites() -> List[str]:
   return list(_eval_suites.keys())
 
 
-def get_eval_suite(name: str) -> EvaluationSuite:
+def get_eval_suite(name: str, seeds: Sequence[int] = None) -> EvaluationSuite:
   """Gets a named evaluation suite."""
   if name not in _eval_suites:
     raise ValueError(f'Unknown eval suite {name}')
 
   # Copy the seeds, rather than returning a mutable object.
   suite = _eval_suites[name]
-  return EvaluationSuite(list(suite.seeds), suite.max_episode_length)
+  if seeds is None:
+    seeds = list(suite.seeds)
+  return EvaluationSuite(seeds, suite.max_episode_length)

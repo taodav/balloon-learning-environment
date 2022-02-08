@@ -15,14 +15,18 @@
 
 """Functions used by the main train binary."""
 
+import os
 import os.path as osp
-from typing import Iterable, List, Optional, Sequence, Tuple
+import json
+from time import time, ctime
+from typing import Iterable, List, Optional, Sequence
 
+from absl import logging
 from balloon_learning_environment.agents import agent as base_agent
 from balloon_learning_environment.env import balloon_env
 from balloon_learning_environment.metrics import collector_dispatcher
 from balloon_learning_environment.metrics import statistics_instance
-
+from balloon_learning_environment.eval import suites, eval_lib
 
 def get_collector_data(
     collectors: Optional[Iterable[str]] = None
@@ -37,6 +41,17 @@ def get_collector_data(
   return collector_constructors
 
 
+def write_eval_result(result: Sequence[eval_lib.EvaluationResult],
+                      eval_dir: str, iteration_number: int) -> None:
+  file_name = f'eval_{iteration_number}.json'
+  file_path = osp.join(eval_dir, file_name)
+  indent = 2
+
+  os.makedirs(eval_dir, exist_ok=True)
+  with open(file_path, 'w') as f:
+    json.dump(result, f, cls=eval_lib.EvalResultEncoder, indent=indent)
+
+
 def run_training_loop(
     base_dir: str,
     env: balloon_env.BalloonEnv,
@@ -46,7 +61,10 @@ def run_training_loop(
     collector_constructors: Sequence[
         collector_dispatcher.CollectorConstructorType],
     *,
-    render_period: int = 10) -> None:
+    render_period: int = 10,
+    checkpoint_period: int = 1,
+    eval_period: int = 1,
+    eval_size: str = 'tiny_eval') -> None:
   """Runs a training loop for a specified number of steps.
 
   Args:
@@ -72,9 +90,21 @@ def run_training_loop(
   # Maybe pass on a sumary writer to the agent.
   agent.set_summary_writer(dispatcher.get_summary_writer())
 
+  dispatcher.pre_training()
+
+  time_start = time()
+  prev_time = time_start
+  avg_time_per_ep = 0
+
+  # # initialize eval functions
+  # eval_dir = osp.join(base_dir, 'evals')
+  # eval_suite = suites.get_eval_suite(eval_size)
+  # eval_result = eval_lib.eval_agent(agent, env, eval_suite,
+  #                                   render_period=render_period)
+  # write_eval_result(eval_result, eval_dir, 0)
+
   agent.set_mode(base_agent.AgentMode.TRAIN)
 
-  dispatcher.pre_training()
   for episode in range(start_episode, num_episodes):
     dispatcher.begin_episode()
     obs = env.reset()
@@ -107,13 +137,28 @@ def run_training_loop(
 
     # The environment has no timeout, so terminal really is a terminal state.
     agent.end_episode(r, terminal)
+
     # Possibly checkpoint the agent.
-    agent.save_checkpoint(checkpoint_dir, episode)
+    if (episode + 1) % checkpoint_period == 0:
+      agent.save_checkpoint(checkpoint_dir, episode)
+
     # TODO(joshgreaves): Fix dispatcher logging the same data twice on terminal.
     dispatcher.end_episode(statistics_instance.StatisticsInstance(
         step=final_episode_step,
         action=a,
         reward=r,
         terminal=terminal))
+
+    curr_time = time()
+    time_per_fix_freq = curr_time - prev_time
+    avg_time_per_ep += (1 / (episode + 1)) * (time_per_fix_freq - avg_time_per_ep)
+    time_remaining = (num_episodes - episode) * avg_time_per_ep
+    logging.info(f"Remaining time: {time_remaining / 60:.2f} minutes")
+    prev_time = curr_time
+
+    # if episode % eval_period == 0:
+    #   eval_result = eval_lib.eval_agent(agent, env, eval_suite,
+    #                                     render_period=render_period)
+    #   write_eval_result(eval_result, eval_dir, 0)
 
   dispatcher.end_training()

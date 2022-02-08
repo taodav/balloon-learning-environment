@@ -44,9 +44,10 @@ def get_agent_gin_file(agent_name: str,
 
 
 def create_agent(agent_name: str, num_actions: int,
-                 observation_shape: Sequence[int]) -> base_agent.Agent:
+                 observation_shape: Sequence[int],
+                 seed: int = None) -> base_agent.Agent:
   return agent_registry.agent_constructor(agent_name)(
-      num_actions, observation_shape=observation_shape)
+      num_actions, observation_shape=observation_shape, seed=seed)
 
 
 def bind_gin_variables(

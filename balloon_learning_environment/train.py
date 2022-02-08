@@ -22,7 +22,7 @@ import os.path as osp
 from absl import app
 from absl import flags
 from balloon_learning_environment import train_lib
-from balloon_learning_environment.env import generative_wind_field
+from balloon_learning_environment.env import generative_wind_field, features
 from balloon_learning_environment.env import wind_field
 from balloon_learning_environment.env.rendering import matplotlib_renderer
 from balloon_learning_environment.utils import run_helpers
@@ -56,9 +56,15 @@ flags.DEFINE_multi_string('gin_bindings', [],
 flags.DEFINE_string(
     'renderer', None,
     'The renderer to use. Note that it is fastest to have this set to None.')
+flags.DEFINE_string(
+  'features', 'all',
+  'What kind of features do we use? (all | mean | var)')
 flags.DEFINE_integer(
     'render_period', 10,
     'The period to render with. Only has an effect if renderer is not None.')
+flags.DEFINE_integer(
+  'checkpoint_period', 4,
+  'The period to save checkpoints.')
 
 FLAGS = flags.FLAGS
 
@@ -85,14 +91,23 @@ def main(_) -> None:
     renderer = _RENDERERS[FLAGS.renderer]()
 
   wf = _WIND_FIELDS[FLAGS.wind_field]
+
+  feature_constructor = features.PerciatelliFeatureConstructor
+  if FLAGS.features == 'mean':
+    feature_constructor = features.MeanOnlyPerciatelliFeatureConstructor
+
   env = gym.make(FLAGS.env_name,
                  wind_field_factory=wf,
-                 renderer=renderer)
+                 renderer=renderer,
+                 feature_constructor_factory=feature_constructor,
+                 seed=FLAGS.run_number)
 
   agent = run_helpers.create_agent(
       FLAGS.agent,
       env.action_space.n,
-      observation_shape=env.observation_space.shape)
+      observation_shape=env.observation_space.shape,
+      seed=FLAGS.run_number
+  )
 
   base_dir = osp.join(FLAGS.base_dir, FLAGS.agent, str(FLAGS.run_number))
   train_lib.run_training_loop(base_dir,
@@ -101,7 +116,8 @@ def main(_) -> None:
                               FLAGS.num_episodes,
                               FLAGS.max_episode_length,
                               collector_constructors,
-                              render_period=FLAGS.render_period)
+                              render_period=FLAGS.render_period,
+                              checkpoint_period=FLAGS.checkpoint_period)
 
   if FLAGS.base_dir is not None:
     image_save_path = osp.join(FLAGS.base_dir, 'balloon_path.png')
@@ -109,6 +125,7 @@ def main(_) -> None:
     if isinstance(img, np.ndarray):
       matplotlib.image.imsave(image_save_path, img)
 
+  print(f"Finished run {FLAGS.run_number}.")
 
 if __name__ == '__main__':
   app.run(main)

@@ -139,7 +139,7 @@ class NoisyWindHarmonic:
     # TODO(bellemare): One generator for all components, move out of here.
     # TODO(bellemare): What are the units for noise4d? Do we want to write
     # constants in that form?
-    return NOISE_MAGNITUDE * self._simplex_generator.noise4d(
+    return NOISE_MAGNITUDE * self._simplex_generator.noise4(
         x.km / self.x_spacing + self._offsets.x,
         y.km / self.y_spacing + self._offsets.y,
         pressure / self.pressure_spacing + self._offsets.pressure,

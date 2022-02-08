@@ -578,3 +578,50 @@ class PerciatelliFeatureConstructor(FeatureConstructor):
       index += 3
 
     return index
+
+
+@gin.configurable(allowlist=[])
+class MeanOnlyPerciatelliFeatureConstructor(PerciatelliFeatureConstructor):
+  """A feature constructor for Perciatelli features, except we zero out the
+  GP variances for our wind features.
+  """
+
+  def __init__(self, forecast: wind_field.WindField,
+               atmosphere: standard_atmosphere.Atmosphere) -> None:
+    super(MeanOnlyPerciatelliFeatureConstructor, self).__init__(forecast, atmosphere)
+
+    # 2 features per pressure level in the encoding (3 - 1), which there are twice as
+    # many of as we use a relative encoding. Plus sixteen ambient variables.
+    self._original_num_features = self.num_features
+    # self.num_features = 2 * (self.num_pressure_levels * 2 - 1) + 16
+
+    # we base the feature mask off of L543 in PerciatelliFeatureConstructor
+    # whenever i % 3 == 0, we have a variance estimate.
+    self.feature_mask = np.ones(self._original_num_features)
+    self.feature_mask[16:][::3] = 0
+    # self.feature_mask = self.feature_mask.astype(bool)
+
+  def get_features(self) -> np.ndarray:
+    """Returns the feature vector for the current balloon.
+
+    Returns:
+      feature_vector: a feature vector for the wind column + more.
+
+    Raises:
+      ValueError: if balloon_pressure is outside of the allowed range. This can
+        be tested for with is_valid_pressure().
+    """
+    balloon_pressure = self._last_balloon_state.pressure
+    if (balloon_pressure < self.min_pressure or
+        balloon_pressure > self.max_pressure):
+      logging.warning((
+        'Balloon pressure %.2f not fully represented by feature constructor. '
+        'If this happens frequently, consider changing the min/max pressure '
+        'bounds on PerciatelliFeatureConstructor.'), balloon_pressure)
+
+    feature_vector = np.zeros(self._original_num_features, dtype=np.float32)
+    self._add_ambient_features(feature_vector)
+    self._add_wind_features(feature_vector)
+
+    # return feature_vector[self.feature_mask]
+    return feature_vector * self.feature_mask

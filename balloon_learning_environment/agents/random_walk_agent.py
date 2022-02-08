@@ -34,7 +34,7 @@ import jax
 import numpy as np
 
 
-_PERCIATELLI_FEATURES_SHAPE = (1099,)  # Expected shape of Perciatelli features.
+_PERCIATELLI_FEATURES_SHAPES = [(1099,), (738,)]  # Expected shape of Perciatelli features.
 _HYSTERESIS = 100  # In Pascals.
 _STDDEV = 0.1666  # ~ 10 [Pa/min].
 
@@ -60,7 +60,7 @@ class RandomWalkAgent(agent.Agent):
     self._target_pressure = sampling.sample_pressure(rng)
 
   def _select_action(self, features_as_vector: np.ndarray) -> int:
-    assert features_as_vector.shape == _PERCIATELLI_FEATURES_SHAPE
+    assert features_as_vector.shape in _PERCIATELLI_FEATURES_SHAPES
     balloon_pressure = features.NamedPerciatelliFeatures(
         features_as_vector).balloon_pressure
     # Note: higher pressures means lower altitude.

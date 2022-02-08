@@ -19,6 +19,7 @@ import dataclasses
 import datetime as dt
 import json
 from typing import Any, List, Sequence
+from time import time
 
 from absl import logging
 from balloon_learning_environment.agents import agent as base_agent
@@ -148,6 +149,10 @@ def eval_agent(agent: base_agent.Agent,
   logging.info('Starting evaluation of %s on %s', agent.get_name(), eval_suite)
   agent.set_mode(base_agent.AgentMode.EVAL)
 
+  time_start = time()
+  prev_time = time_start
+  avg_time_per_seed = 0
+
   for seed_idx, seed in enumerate(eval_suite.seeds):
     total_reward = 0.0
     steps_within_radius = 0
@@ -195,13 +200,20 @@ def eval_agent(agent: base_agent.Agent,
         final_timestep=step_count,
         flight_path=flight_path)
 
+    curr_time = time()
+    time_per_fix_freq = curr_time - prev_time
+    avg_time_per_seed += (1 / (seed_idx + 1)) * (time_per_fix_freq - avg_time_per_seed)
+    time_remaining = (len(eval_suite.seeds) - (seed_idx + 1)) * avg_time_per_seed
+    prev_time = curr_time
+
     # This logs the fraction of seeds evaluated, the seed, and the eval result.
     # e.g. "10 / 100: (seed 10) EvalResult(cumulative_reward=...)"
-    logging.info('%d / %d: (seed %d) %s',
+    logging.info('%d / %d: (seed %d) %s, time remaining for current checkpoint: %d mins',
                  seed_idx + 1,
                  len(eval_suite.seeds),
                  seed,
-                 eval_result)
+                 eval_result,
+                 time_remaining)
     results.append(eval_result)
 
   return results
